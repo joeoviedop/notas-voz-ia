@@ -2,7 +2,7 @@
 
 > Convierte tus audios en transcripciones, resúmenes y listas de acciones usando inteligencia artificial.
 
-[![CI Status](https://github.com/tu-usuario/notas-voz-resumen-acciones/workflows/CI%20Pipeline/badge.svg)](https://github.com/tu-usuario/notas-voz-resumen-acciones/actions)
+[![CI Status](https://github.com/joeoviedop/notas-voz-ia/workflows/CI%20Pipeline/badge.svg)](https://github.com/joeoviedop/notas-voz-ia/actions)
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Next.js](https://img.shields.io/badge/Next.js-000000?style=flat&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![Fastify](https://img.shields.io/badge/Fastify-000000?style=flat&logo=fastify&logoColor=white)](https://www.fastify.io/)
@@ -30,17 +30,19 @@
 Este proyecto está organizado como un **monorepo** con las siguientes partes:
 
 ```
-📁 notas-voz-resumen-acciones/
+📁 notas-voz-ia/
 ├── 📁 apps/
 │   ├── 📁 frontend/          # Next.js App (Puerto 3000)
 │   └── 📁 backend/           # Fastify API (Puerto 4000)
 ├── 📁 packages/
-│   ├── 📁 schemas/           # Validación con Zod
-│   └── 📁 sdk/               # Cliente TypeScript
+│   ├── 📁 schemas/           # Esquemas Zod + TypeScript
+│   └── 📁 sdk/               # SDK Cliente TypeScript
 ├── 📁 contracts/
-│   └── openapi.yaml          # Especificación API
+│   ├── 📄 openapi.yaml       # Especificación OpenAPI v1.0.0
+│   └── 📄 README.md          # Documentación de contratos
 ├── 📁 mocks/
 │   └── server.js             # Mock server (Puerto 5000)
+├── 📄 WARP.md                # Guía para desarrolladores
 └── 📁 .github/
     └── workflows/            # CI/CD con GitHub Actions
 ```
@@ -82,8 +84,8 @@ Este proyecto está organizado como un **monorepo** con las siguientes partes:
 
 ```bash
 # Clonar el repositorio
-git clone https://github.com/tu-usuario/notas-voz-resumen-acciones.git
-cd notas-voz-resumen-acciones
+git clone https://github.com/joeoviedop/notas-voz-ia.git
+cd notas-voz-ia
 
 # Instalar dependencias
 pnpm install
@@ -111,9 +113,10 @@ pnpm mocks:dev               # Mock server en http://localhost:5000
 ### URLs de Desarrollo
 
 - **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:4000
+- **Backend API**: http://localhost:4000/api/v1
 - **Mock Server**: http://localhost:5000
-- **Health Check**: http://localhost:4000/health
+- **Health Check**: http://localhost:4000/api/v1/health
+- **API Docs**: Ver `contracts/README.md`
 
 ## 🧪 Testing
 
@@ -196,7 +199,25 @@ NEXT_PUBLIC_MOCK_MODE=true
 
 ### Configuración de OpenAPI
 
-El contrato de la API está definido en `contracts/openapi.yaml`. Para regenerar el SDK cliente después de cambios:
+✅ **Contratos API Completamente Implementados** 
+
+El proyecto incluye contratos API completos y congelados para desarrollo paralelo:
+
+- **OpenAPI v1.0.0**: Especificación completa en `contracts/openapi.yaml`
+- **Base URL**: `/api/v1` para todos los endpoints
+- **Autenticación**: JWT RS256 con refresh tokens (15m + 7d)
+- **Esquemas Zod**: Validación tipada en `packages/schemas/`
+- **SDK TypeScript**: Cliente completo en `packages/sdk/`
+- **Catálogo de errores**: 10 códigos tipados con manejo
+- **Documentación**: Diagramas de flujo y ejemplos en `contracts/README.md`
+
+#### Endpoints Implementados:
+- **Auth**: register, login, refresh, logout, reset password
+- **Notes**: CRUD, upload, paginación cursor-based
+- **Processing**: transcripción y resumen asíncronos  
+- **Actions**: CRUD de checklist items
+
+Para regenerar el SDK cliente después de cambios:
 
 ```bash
 pnpm sdk:generate

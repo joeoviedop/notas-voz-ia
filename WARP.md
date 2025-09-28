@@ -6,6 +6,8 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 This is a **monorepo** for an AI-powered voice notes application that converts audio files into transcriptions, summaries, and actionable items. The system integrates with multiple AI providers (OpenAI, AssemblyAI, Anthropic) and provides both real and mock modes for development.
 
+**✅ API Contracts Status**: Complete OpenAPI v1.0.0 specification implemented with all MVP endpoints, Zod schemas, TypeScript SDK, and comprehensive documentation.
+
 ## Architecture
 
 ### High-Level Structure
@@ -96,8 +98,74 @@ The project supports development without external API keys using comprehensive m
 
 ### Package Architecture
 - `packages/schemas`: Zod schemas shared between frontend/backend for validation
-- `packages/sdk`: Auto-generated TypeScript client from OpenAPI spec
+- `packages/sdk`: Complete TypeScript client with all endpoints and error handling
 - Apps import packages using workspace references: `@notas-voz/schemas`, `@notas-voz/sdk`
+
+## ✅ API Contracts (Implemented)
+
+### Complete OpenAPI v1.0.0 Specification
+The API contracts are **frozen and ready** for parallel development:
+
+- **Location**: `contracts/openapi.yaml`
+- **Base URL**: `/api/v1` (development: `localhost:4000/api/v1`)
+- **Validation**: Passes `redocly lint` with minor warnings
+- **Documentation**: Complete with examples in `contracts/README.md`
+
+### Implemented Endpoints
+
+#### Authentication (`/api/v1/auth/*`)
+- `POST /auth/register` - User registration with email/password
+- `POST /auth/login` - Login with credentials, returns access token + cookie
+- `POST /auth/refresh` - Renew access token using refresh cookie
+- `POST /auth/logout` - Invalidate refresh token and clear cookie
+- `POST /auth/reset/request` - Request password reset email
+- `POST /auth/reset/confirm` - Confirm password reset with token
+
+#### Notes Management (`/api/v1/notes/*`)
+- `GET /notes` - List notes with cursor pagination, search, and filters
+- `POST /notes` - Create empty note with title/tags
+- `GET /notes/{id}` - Get note details with transcript/summary/actions
+- `PATCH /notes/{id}` - Update note metadata
+- `DELETE /notes/{id}` - Delete note and associated files
+- `POST /notes/{id}/upload` - Upload audio file to existing note
+
+#### Async Processing (`/api/v1/notes/{id}/*`)
+- `POST /notes/{id}/transcribe` - Start transcription job (202 response)
+- `POST /notes/{id}/summarize` - Start summarization job (202 response)
+
+#### Actions Management (`/api/v1/actions/*`)
+- `POST /notes/{id}/actions` - Add action item to note
+- `PATCH /actions/{id}` - Update action text/status/due date
+- `DELETE /actions/{id}` - Remove action item
+
+### Error Handling (Implemented)
+**10 Typed Error Codes** with consistent format:
+```typescript
+{
+  "error": {
+    "code": "AUTH_INVALID_CREDENTIALS",
+    "message": "Invalid email or password"
+  }
+}
+```
+
+**Error Codes**: `AUTH_INVALID_CREDENTIALS`, `AUTH_TOKEN_EXPIRED`, `FILE_TOO_LARGE`, `UNSUPPORTED_MEDIA_TYPE`, `NOTE_NOT_FOUND`, `LLM_FAILURE`, `STT_FAILURE`, `RATE_LIMITED`, `VALIDATION_ERROR`, `INTERNAL_ERROR`
+
+### SDK Usage (Ready for Frontend)
+```typescript
+import { createApiClient, ApiError } from '@notas-voz/sdk';
+
+const client = createApiClient({
+  baseUrl: 'http://localhost:4000/api/v1',
+  accessToken: 'jwt-token',
+  timeout: 30000
+});
+
+// Complete typed API access
+const notes = await client.listNotes({ query: 'meeting' });
+const note = await client.createNote({ title: 'My Note', tags: ['work'] });
+await client.uploadAudioToNote(note.id, audioFile);
+```
 
 ## Environment Configuration
 
@@ -131,12 +199,13 @@ The system supports multiple AI providers:
 
 ## File Processing Pipeline
 
-### Audio Upload Flow
-1. **Upload**: `POST /notes` with multipart audio file
-2. **Storage**: File saved to S3-compatible storage
-3. **Transcription**: `POST /notes/{id}/transcribe` triggers STT provider
-4. **Summarization**: `POST /notes/{id}/summarize` triggers LLM provider
-5. **Completion**: Note status becomes `ready` with transcript, summary, keyPoints, and actions
+### Audio Upload Flow (Updated with Contract Implementation)
+1. **Create Note**: `POST /api/v1/notes` creates empty note with metadata
+2. **Upload Audio**: `POST /api/v1/notes/{id}/upload` with multipart audio file
+3. **Storage**: File saved to S3-compatible storage, status = `uploaded`
+4. **Transcription**: `POST /api/v1/notes/{id}/transcribe` triggers STT provider (202 response)
+5. **Summarization**: `POST /api/v1/notes/{id}/summarize` triggers LLM provider (202 response) 
+6. **Completion**: Note status becomes `ready` with transcript, summary, bullets, and actions
 
 ### State Management
 Notes have a strict state progression managed by the backend:
@@ -176,10 +245,13 @@ GitHub Actions runs:
 - Shared dependencies managed at root level
 - Package scripts use `pnpm -r` for parallel execution across workspaces
 
-### Authentication Flow
-- JWT-based authentication with refresh tokens
-- Mock mode provides instant authentication for development
-- Production uses secure JWT secrets and proper token rotation
+### Authentication Flow (Contract Implementation)
+- **JWT RS256** with access tokens (15min) and refresh tokens (7d)
+- **Access tokens**: Sent via `Authorization: Bearer <token>` header
+- **Refresh tokens**: Stored in httpOnly cookies with `SameSite=Lax`
+- **Public routes**: All `/api/v1/auth/*` endpoints
+- **Protected routes**: Everything else requires valid JWT
+- **Mock mode**: Instant auth with `test@example.com` / `password123`
 
 ### Error Handling & Observability
 - **Structured Logging**: Pino logger with correlation IDs
