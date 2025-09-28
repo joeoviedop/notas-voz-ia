@@ -1,0 +1,523 @@
+openapi: 3.0.3
+info:
+  title: Notas de Voz con IA API
+  description: API para convertir audios en transcripciones, resúmenes y listas de acciones
+  version: 0.1.0
+  contact:
+    name: Equipo de Desarrollo
+    email: dev@notasdevoz.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:4000
+    description: Desarrollo local
+  - url: https://api.notasdevoz.com
+    description: Producción
+
+security:
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT para autenticación
+
+  schemas:
+    User:
+      type: object
+      required:
+        - id
+        - email
+        - name
+      properties:
+        id:
+          type: string
+          description: ID único del usuario
+        email:
+          type: string
+          format: email
+          description: Email del usuario
+        name:
+          type: string
+          description: Nombre completo del usuario
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    Note:
+      type: object
+      required:
+        - id
+        - userId
+        - title
+        - status
+        - createdAt
+        - keyPoints
+        - actions
+      properties:
+        id:
+          type: string
+          description: ID único de la nota
+        userId:
+          type: string
+          description: ID del usuario propietario
+        title:
+          type: string
+          description: Título de la nota
+        status:
+          type: string
+          enum: [idle, uploading, uploaded, transcribing, summarizing, ready, error]
+          description: Estado actual del procesamiento
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        originalFileName:
+          type: string
+          description: Nombre original del archivo de audio
+        fileSize:
+          type: integer
+          description: Tamaño del archivo en bytes
+        transcript:
+          type: string
+          nullable: true
+          description: Transcripción del audio
+        summary:
+          type: string
+          nullable: true
+          description: Resumen generado por IA
+        keyPoints:
+          type: array
+          items:
+            type: string
+          description: Puntos clave identificados
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionItem'
+        tags:
+          type: array
+          items:
+            type: string
+          description: Etiquetas de la nota
+
+    ActionItem:
+      type: object
+      required:
+        - id
+        - text
+        - completed
+      properties:
+        id:
+          type: string
+          description: ID único de la acción
+        text:
+          type: string
+          description: Descripción de la acción
+        completed:
+          type: boolean
+          description: Si la acción está completada
+        suggestedDate:
+          type: string
+          format: date-time
+          description: Fecha sugerida para completar
+        completedAt:
+          type: string
+          format: date-time
+          description: Fecha de completación
+
+    ApiResponse:
+      type: object
+      required:
+        - correlationId
+      properties:
+        data:
+          type: object
+        message:
+          type: string
+        error:
+          type: string
+        correlationId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    NotesListResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Note'
+            total:
+              type: integer
+
+    NoteResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Note'
+
+    AuthResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                token:
+                  type: string
+                user:
+                  $ref: '#/components/schemas/User'
+                expiresIn:
+                  type: string
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - name
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 6
+        name:
+          type: string
+          minLength: 1
+
+paths:
+  /health:
+    get:
+      summary: Health check básico
+      description: Verifica el estado del servicio
+      security: []
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Servicio funcionando correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /health/detailed:
+    get:
+      summary: Health check detallado
+      description: Información detallada del estado del servicio
+      security: []
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Estado detallado del servicio
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /auth/login:
+    post:
+      summary: Iniciar sesión
+      description: Autenticar usuario con email y contraseña
+      security: []
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Credenciales inválidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /auth/register:
+    post:
+      summary: Registrar usuario
+      description: Crear nueva cuenta de usuario
+      security: []
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Usuario creado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Datos de registro inválidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /auth/verify:
+    get:
+      summary: Verificar token
+      description: Validar token JWT y obtener información del usuario
+      tags:
+        - Authentication
+      responses:
+        '200':
+          description: Token válido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          description: Token inválido o expirado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /notes:
+    get:
+      summary: Listar notas
+      description: Obtener todas las notas del usuario autenticado
+      tags:
+        - Notes
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+          description: Número máximo de notas a devolver
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Número de notas a omitir
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [idle, uploading, uploaded, transcribing, summarizing, ready, error]
+          description: Filtrar por estado
+      responses:
+        '200':
+          description: Lista de notas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotesListResponse'
+
+    post:
+      summary: Crear nota
+      description: Subir archivo de audio para crear nueva nota
+      tags:
+        - Notes
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - audio
+              properties:
+                audio:
+                  type: string
+                  format: binary
+                  description: Archivo de audio (máx 25MB)
+                title:
+                  type: string
+                  description: Título opcional para la nota
+                tags:
+                  type: string
+                  description: Etiquetas JSON array
+      responses:
+        '201':
+          description: Nota creada exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteResponse'
+        '400':
+          description: Archivo inválido o faltante
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /notes/{id}:
+    get:
+      summary: Obtener nota
+      description: Obtener detalles de una nota específica
+      tags:
+        - Notes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID de la nota
+      responses:
+        '200':
+          description: Detalles de la nota
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteResponse'
+        '404':
+          description: Nota no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+    put:
+      summary: Actualizar nota
+      description: Actualizar título, etiquetas u otros metadatos de la nota
+      tags:
+        - Notes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID de la nota
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                tags:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Nota actualizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteResponse'
+        '404':
+          description: Nota no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /notes/{id}/transcribe:
+    post:
+      summary: Transcribir audio
+      description: Iniciar proceso de transcripción del audio
+      tags:
+        - Notes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID de la nota
+      responses:
+        '200':
+          description: Transcripción iniciada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteResponse'
+        '404':
+          description: Nota no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+  /notes/{id}/summarize:
+    post:
+      summary: Generar resumen
+      description: Generar resumen y acciones usando IA
+      tags:
+        - Notes
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID de la nota
+      responses:
+        '200':
+          description: Resumen iniciado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoteResponse'
+        '404':
+          description: Nota no encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+
+tags:
+  - name: Health
+    description: Endpoints de estado del servicio
+  - name: Authentication
+    description: Autenticación y autorización
+  - name: Notes
+    description: Gestión de notas de voz

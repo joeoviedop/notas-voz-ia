@@ -1,0 +1,46 @@
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Production
+/build
+/dist
+/.next/
+/out/
+
+# Generated files
+packages/sdk/generated
+*.d.ts
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage
+
+# Logs
+*.log
+lerna-debug.log*
+
+# Database
+*.sqlite
+*.db
+
+# Temporary
+*.tmp
+*.temp
+
+# Archives
+*.zip
+*.tar.gz
+
+# IDE
+.vscode
+.idea
+
+# Lock files
+pnpm-lock.yaml
+package-lock.json
+yarn.lock

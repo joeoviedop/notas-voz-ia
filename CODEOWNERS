@@ -1,0 +1,53 @@
+# Global owners (fallback)
+* @tu-usuario @tu-equipo
+
+# Frontend
+/apps/frontend/ @equipo-frontend
+/apps/frontend/src/components/ @equipo-frontend @ui-lead
+/apps/frontend/src/app/ @equipo-frontend @frontend-lead
+
+# Backend  
+/apps/backend/ @equipo-backend
+/apps/backend/src/routes/ @equipo-backend @backend-lead
+/apps/backend/src/middleware/ @equipo-backend @security-lead
+
+# Packages compartidos
+/packages/ @equipo-backend @equipo-frontend
+/packages/schemas/ @backend-lead @frontend-lead
+/packages/sdk/ @backend-lead @api-lead
+
+# Contratos API
+/contracts/ @api-lead @backend-lead
+/contracts/openapi.yaml @api-lead @backend-lead @equipo-qa
+
+# Mocks y testing
+/mocks/ @equipo-qa @equipo-backend
+/mocks/.fixtures/ @equipo-qa
+
+# CI/CD y configuración
+/.github/ @devops-lead @backend-lead
+/.github/workflows/ @devops-lead
+/package.json @backend-lead @devops-lead
+/pnpm-workspace.yaml @backend-lead @devops-lead
+/.nvmrc @backend-lead @devops-lead
+
+# Configuración de tooling
+/.eslintrc.json @frontend-lead @backend-lead
+/.prettierrc.json @frontend-lead @backend-lead
+/tsconfig.json @frontend-lead @backend-lead
+
+# VSCode y editor
+/.vscode/ @equipo-frontend @equipo-backend
+/.editorconfig @equipo-frontend @equipo-backend
+
+# Documentación
+/README.md @product-lead @tech-lead
+/docs/ @product-lead @tech-lead
+/*.md @product-lead
+
+# Configuración de entorno
+/.env.example @backend-lead @devops-lead
+/.gitignore @backend-lead @devops-lead
+
+# Seguridad y secrets
+/CODEOWNERS @admin @tech-lead

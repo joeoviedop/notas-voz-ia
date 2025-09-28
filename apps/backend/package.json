@@ -1,0 +1,35 @@
+{
+  "name": "@notas-voz/backend",
+  "version": "0.1.0",
+  "description": "Backend API para notas de voz con IA",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write . --ignore-path ../../.prettierignore",
+    "typecheck": "tsc --noEmit",
+    "test": "jest",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "fastify": "^4.24.3",
+    "@fastify/cors": "^8.5.0",
+    "@fastify/helmet": "^11.1.1",
+    "@fastify/multipart": "^8.0.0",
+    "@fastify/rate-limit": "^9.0.1",
+    "pino": "^8.16.2",
+    "pino-pretty": "^10.2.0",
+    "zod": "^3.22.4",
+    "@notas-voz/schemas": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsx": "^4.6.0",
+    "typescript": "^5.3.2",
+    "jest": "^29.7.0",
+    "@types/jest": "^29.5.8"
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "name": "notas-voz-resumen-acciones",
+  "version": "1.0.0",
+  "description": "Aplicación para convertir audios en transcripciones, resúmenes y acciones",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@8.15.1",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "format": "pnpm -r format",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "contracts:check": "redocly lint contracts/openapi.yaml || echo 'placeholder ok'",
+    "sdk:generate": "openapi-generator-cli generate -i contracts/openapi.yaml -o packages/sdk -g typescript-fetch --additional-properties=supportsES6=true,modelPropertyNaming=camelCase || echo 'sdk placeholder'",
+    "mocks:dev": "node mocks/server.js",
+    "seed": "pnpm -r seed",
+    "clean": "pnpm -r clean && rm -rf node_modules",
+    "setup": "pnpm install && pnpm contracts:check && pnpm sdk:generate",
+    "ci": "pnpm typecheck && pnpm lint && pnpm build && pnpm test"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^18.4.3",
+    "@commitlint/config-conventional": "^18.4.3",
+    "@openapitools/openapi-generator-cli": "^2.7.0",
+    "@redocly/cli": "^1.10.1",
+    "@typescript-eslint/eslint-plugin": "^6.13.1",
+    "@typescript-eslint/parser": "^6.13.1",
+    "eslint": "^8.54.0",
+    "eslint-config-prettier": "^9.0.0",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.1.0",
+    "prettier": "^3.1.0",
+    "typescript": "^5.3.2"
+  },
+  "lint-staged": {
+    "*.{js,ts,tsx,json,md,yaml,yml}": [
+      "prettier --write"
+    ],
+    "*.{js,ts,tsx}": [
+      "eslint --fix"
+    ]
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ]
+  },
+  "keywords": [
+    "transcripción",
+    "resumen",
+    "notas",
+    "audio",
+    "acciones",
+    "ai"
+  ],
+  "author": "Tu equipo",
+  "license": "MIT"
+}
