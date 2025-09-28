@@ -3,10 +3,14 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import multipart from '@fastify/multipart';
+import cookie from '@fastify/cookie';
+import jwt from '@fastify/jwt';
 
 import { healthRoutes } from './routes/health.js';
 import { notesRoutes } from './routes/notes.js';
 import { authRoutes } from './routes/auth.js';
+import { actionsRoutes } from './routes/actions.js';
+import { adminRoutes } from './routes/admin.js';
 
 const fastify = Fastify({
   logger: {
@@ -21,34 +25,68 @@ const fastify = Fastify({
   },
 });
 
-// Plugins de seguridad
+// Security plugins
 await fastify.register(helmet, {
   crossOriginEmbedderPolicy: false,
   contentSecurityPolicy: false,
 });
 
+// CORS configuration
+const corsOrigins = process.env.CORS_ORIGIN 
+  ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
+  : [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      /\.vercel\.app$/,
+    ];
+
 await fastify.register(cors, {
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:3001',
-    /\.vercel\.app$/,
-  ],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  origin: corsOrigins,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   credentials: true,
 });
 
+// Rate limiting
+const rateWindowMs = parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000');
+const maxRequests = parseInt(
+  process.env.RATE_LIMIT_MAX_REQUESTS || 
+  (process.env.NODE_ENV === 'development' ? '1000' : '100')
+);
+
 await fastify.register(rateLimit, {
-  max: process.env.NODE_ENV === 'development' ? 1000 : 100,
-  timeWindow: '1 minute',
+  max: maxRequests,
+  timeWindow: rateWindowMs,
+  errorResponseBuilder: (request, context) => {
+    return {
+      error: {
+        code: 'RATE_LIMITED',
+        message: `Too many requests. Limit: ${context.max} requests per ${Math.round(context.timeWindow / 1000)} seconds.`
+      }
+    };
+  }
 });
 
-// Plugin para multipart (archivos)
-await fastify.register(multipart);
+// Multipart file upload support
+await fastify.register(multipart, {
+  limits: {
+    fileSize: 25 * 1024 * 1024, // 25MB
+    files: 1,
+    fieldSize: 1024 * 1024, // 1MB
+  }
+});
 
-// Rutas
-await fastify.register(healthRoutes, { prefix: '/health' });
-await fastify.register(authRoutes, { prefix: '/auth' });
-await fastify.register(notesRoutes, { prefix: '/notes' });
+// Cookie support for refresh tokens
+await fastify.register(cookie, {
+  secret: process.env.COOKIE_SECRET || 'default-cookie-secret-change-in-production',
+});
+
+// API Routes with /api/v1 prefix
+const apiPrefix = '/api/v1';
+await fastify.register(healthRoutes, { prefix: `${apiPrefix}/health` });
+await fastify.register(authRoutes, { prefix: `${apiPrefix}/auth` });
+await fastify.register(notesRoutes, { prefix: `${apiPrefix}/notes` });
+await fastify.register(actionsRoutes, { prefix: `${apiPrefix}/actions` });
+await fastify.register(adminRoutes, { prefix: `${apiPrefix}/admin` });
 
 // Middleware de correlation ID
 fastify.addHook('onRequest', async (request, reply) => {
@@ -59,7 +97,7 @@ fastify.addHook('onRequest', async (request, reply) => {
   reply.header('x-correlation-id', correlationId);
 });
 
-// Error handler global
+// Global error handler
 fastify.setErrorHandler((error, request, reply) => {
   const correlationId = request.headers['x-correlation-id'];
   
@@ -75,16 +113,19 @@ fastify.setErrorHandler((error, request, reply) => {
   );
 
   const statusCode = error.statusCode || 500;
-  const message = statusCode === 500 ? 'Error interno del servidor' : error.message;
+  const message = statusCode === 500 ? 'Internal server error' : error.message;
 
   reply.status(statusCode).send({
-    error: message,
+    error: {
+      code: statusCode === 500 ? 'INTERNAL_ERROR' : 'REQUEST_ERROR',
+      message,
+    },
     correlationId,
     timestamp: new Date().toISOString(),
   });
 });
 
-// Iniciar servidor
+// Start server
 const start = async () => {
   try {
     const port = Number(process.env.PORT) || 4000;
@@ -93,14 +134,18 @@ const start = async () => {
     await fastify.listen({ port, host });
     
     fastify.log.info(
-      `🚀 Servidor iniciado en http://${host}:${port}`
+      `🚀 Server started on http://${host}:${port}`
     );
     
-    fastify.log.info('Rutas disponibles:');
-    fastify.log.info('  GET /health - Health check');
-    fastify.log.info('  POST /auth/login - Login (mock)');
-    fastify.log.info('  POST /notes - Crear nota (mock)');
-    fastify.log.info('  GET /notes - Listar notas (mock)');
+    fastify.log.info('Available routes:');
+    fastify.log.info(`  GET ${apiPrefix}/health - Health check`);
+    fastify.log.info(`  GET ${apiPrefix}/health/detailed - Detailed health check`);
+    fastify.log.info(`  GET ${apiPrefix}/health/ready - Readiness probe`);
+    fastify.log.info(`  GET ${apiPrefix}/health/live - Liveness probe`);
+    fastify.log.info(`  ${apiPrefix}/auth/* - Authentication endpoints`);
+    fastify.log.info(`  ${apiPrefix}/notes/* - Notes management`);
+    fastify.log.info(`  ${apiPrefix}/actions/* - Actions management`);
+    fastify.log.info(`  ${apiPrefix}/admin/* - Admin endpoints`);
     
   } catch (err) {
     fastify.log.error(err);

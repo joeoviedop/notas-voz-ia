@@ -1,96 +1,150 @@
 import { FastifyPluginAsync } from 'fastify';
+import { 
+  LoginRequestSchema, 
+  RegisterRequestSchema,
+  ResetRequestSchema,
+  ResetConfirmRequestSchema,
+  TokenResponseSchema,
+  AuthResponseSchema
+} from '@notas-voz/schemas';
+import { validateBody, handleApiError } from '../middleware/validation.middleware.js';
+import { authService } from '../services/auth.service.js';
+import { nanoid } from 'nanoid';
 
 export const authRoutes: FastifyPluginAsync = async (fastify) => {
   
-  // Login mock
-  fastify.post('/login', async (request, reply) => {
-    const body = request.body as { email: string; password: string };
-    
-    if (!body.email || !body.password) {
-      return reply.status(400).send({
-        error: 'Email y password son requeridos',
-        correlationId: request.headers['x-correlation-id'],
-      });
-    }
-
-    // Simular validación de credenciales
-    if (body.email === 'test@example.com' && body.password === 'password123') {
-      const mockToken = `mock-jwt-token-${Date.now()}`;
+  // Register user
+  fastify.post('/register', {
+    preHandler: validateBody(RegisterRequestSchema)
+  }, async (request, reply) => {
+    try {
+      const registerData = request.validatedBody;
+      const authResponse = await authService.register(registerData);
       
-      return {
-        token: mockToken,
-        user: {
-          id: 'user-mock-123',
-          email: body.email,
-          name: 'Usuario de Prueba',
-        },
-        expiresIn: '24h',
-        correlationId: request.headers['x-correlation-id'],
+      // Generate refresh token
+      const user = {
+        id: authResponse.user.id,
+        email: authResponse.user.email,
+        createdAt: new Date(authResponse.user.createdAt),
+        updatedAt: new Date(),
+        password: '' // Not needed for token generation
       };
+      
+      const refreshToken = authService.generateRefreshToken(user);
+      
+      // Set refresh token as httpOnly cookie
+      reply.setCookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        path: '/'
+      });
+      
+      return reply.status(201).send(authResponse);
+    } catch (error) {
+      return handleApiError(error, request, reply);
     }
-
-    return reply.status(401).send({
-      error: 'Credenciales inválidas',
-      correlationId: request.headers['x-correlation-id'],
-    });
   });
 
-  // Registro mock
-  fastify.post('/register', async (request, reply) => {
-    const body = request.body as { email: string; password: string; name: string };
-    
-    if (!body.email || !body.password || !body.name) {
-      return reply.status(400).send({
-        error: 'Email, password y name son requeridos',
-        correlationId: request.headers['x-correlation-id'],
+  // Login user
+  fastify.post('/login', {
+    preHandler: validateBody(LoginRequestSchema)
+  }, async (request, reply) => {
+    try {
+      const loginData = request.validatedBody;
+      const loginResult = await authService.login(loginData);
+      
+      // Set refresh token as httpOnly cookie
+      reply.setCookie('refreshToken', loginResult.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        path: '/'
       });
+      
+      return reply.status(200).send({
+        accessToken: loginResult.accessToken
+      });
+    } catch (error) {
+      return handleApiError(error, request, reply);
     }
-
-    // Simular registro
-    const mockToken = `mock-jwt-token-${Date.now()}`;
-    
-    return reply.status(201).send({
-      token: mockToken,
-      user: {
-        id: `user-${Date.now()}`,
-        email: body.email,
-        name: body.name,
-      },
-      message: 'Usuario registrado exitosamente',
-      correlationId: request.headers['x-correlation-id'],
-    });
   });
 
-  // Verificar token mock
-  fastify.get('/verify', async (request, reply) => {
-    const authHeader = request.headers.authorization;
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return reply.status(401).send({
-        error: 'Token no proporcionado',
-        correlationId: request.headers['x-correlation-id'],
+  // Refresh access token
+  fastify.post('/refresh', async (request, reply) => {
+    try {
+      const refreshToken = request.cookies.refreshToken;
+      
+      if (!refreshToken) {
+        throw new Error('AUTH_TOKEN_EXPIRED');
+      }
+      
+      const tokenResponse = await authService.refreshToken(refreshToken);
+      
+      return reply.status(200).send(tokenResponse);
+    } catch (error) {
+      // Clear invalid refresh token cookie
+      reply.clearCookie('refreshToken', {
+        path: '/'
       });
+      return handleApiError(error, request, reply);
     }
+  });
 
-    const token = authHeader.substring(7);
-    
-    // Simular validación de token
-    if (token.startsWith('mock-jwt-token-')) {
-      return {
-        valid: true,
-        user: {
-          id: 'user-mock-123',
-          email: 'test@example.com',
-          name: 'Usuario de Prueba',
-        },
-        correlationId: request.headers['x-correlation-id'],
-      };
+  // Logout user
+  fastify.post('/logout', async (request, reply) => {
+    try {
+      const refreshToken = request.cookies.refreshToken;
+      
+      await authService.logout(refreshToken);
+      
+      // Clear refresh token cookie
+      reply.clearCookie('refreshToken', {
+        path: '/'
+      });
+      
+      return reply.status(204).send();
+    } catch (error) {
+      // Still clear the cookie even if logout fails
+      reply.clearCookie('refreshToken', {
+        path: '/'
+      });
+      return reply.status(204).send();
     }
+  });
 
-    return reply.status(401).send({
-      error: 'Token inválido',
-      correlationId: request.headers['x-correlation-id'],
-    });
+  // Request password reset
+  fastify.post('/reset/request', {
+    preHandler: validateBody(ResetRequestSchema)
+  }, async (request, reply) => {
+    try {
+      const resetData = request.validatedBody;
+      await authService.requestPasswordReset(resetData);
+      
+      return reply.status(200).send({
+        message: 'Reset email sent'
+      });
+    } catch (error) {
+      return handleApiError(error, request, reply);
+    }
+  });
+
+  // Confirm password reset
+  fastify.post('/reset/confirm', {
+    preHandler: validateBody(ResetConfirmRequestSchema)
+  }, async (request, reply) => {
+    try {
+      const confirmData = request.validatedBody;
+      await authService.confirmPasswordReset(confirmData);
+      
+      return reply.status(200).send({
+        message: 'Password updated'
+      });
+    } catch (error) {
+      return handleApiError(error, request, reply);
+    }
   });
 
 };

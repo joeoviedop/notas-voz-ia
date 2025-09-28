@@ -1,0 +1,272 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================
+// USER MANAGEMENT
+// =============================================
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  password     String   // bcrypt hash
+  tokenVersion Int      @default(0) // For refresh token invalidation
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relations
+  notes         Note[]
+  actions       Action[]
+  passwordReset PasswordReset[]
+  auditEvents   AuditEvent[]
+
+  @@map("users")
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@map("password_resets")
+}
+
+// =============================================
+// NOTES AND MEDIA
+// =============================================
+
+enum NoteStatus {
+  idle
+  uploading
+  uploaded
+  transcribing
+  summarizing
+  ready
+  error
+
+  @@map("note_status")
+}
+
+model Note {
+  id        String     @id @default(cuid())
+  title     String?
+  status    NoteStatus @default(idle)
+  tags      String[]   @default([])
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  // Relations
+  media       Media[]
+  transcript  Transcript?
+  summary     Summary?
+  actions     Action[]
+  auditEvents AuditEvent[]
+
+  @@map("notes")
+}
+
+model Media {
+  id          String   @id @default(cuid())
+  filename    String
+  originalName String?
+  size        Int
+  contentType String
+  storageKey  String   @unique // S3 object key
+  storageUrl  String?  // Optional direct URL
+  noteId      String
+  note        Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("media")
+}
+
+// =============================================
+// TRANSCRIPTION AND PROCESSING
+// =============================================
+
+model Transcript {
+  id         String  @id @default(cuid())
+  text       String
+  language   String  @default("es")
+  confidence Float   @default(0.0)
+  provider   String  // STT provider used (openai, assemblyai, mock)
+  noteId     String  @unique
+  note       Note    @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Additional metadata from STT providers
+  metadata   Json?   // Store provider-specific response data
+
+  @@map("transcripts")
+}
+
+model Summary {
+  id        String   @id @default(cuid())
+  tlDr      String   // Short summary
+  bullets   String[] @default([]) // Key points
+  provider  String   // LLM provider used (openai, anthropic, mock)
+  noteId    String   @unique
+  note      Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Additional metadata from LLM providers
+  metadata  Json?    // Store provider-specific response data
+
+  @@map("summaries")
+}
+
+// =============================================
+// ACTIONS AND TASKS
+// =============================================
+
+model Action {
+  id            String    @id @default(cuid())
+  text          String
+  done          Boolean   @default(false)
+  dueSuggested  DateTime?
+  noteId        String
+  note          Note      @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("actions")
+}
+
+// =============================================
+// QUEUE AND PROCESSING
+// =============================================
+
+enum JobStatus {
+  pending
+  processing
+  completed
+  failed
+  retrying
+
+  @@map("job_status")
+}
+
+enum JobType {
+  transcribe
+  summarize
+
+  @@map("job_type")
+}
+
+model ProcessingJob {
+  id          String    @id @default(cuid())
+  type        JobType
+  status      JobStatus @default(pending)
+  noteId      String
+  provider    String    // STT/LLM provider to use
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  payload     Json      // Job-specific data
+  error       String?   // Last error message
+  result      Json?     // Job result
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("processing_jobs")
+}
+
+// =============================================
+// AUDIT AND MONITORING
+// =============================================
+
+enum EventType {
+  user_created
+  user_registered
+  user_login
+  user_login_failed
+  user_logout
+  password_reset_requested
+  password_reset_completed
+  note_created
+  note_updated
+  note_deleted
+  media_uploaded
+  transcription_started
+  transcription_completed
+  transcription_failed
+  summarization_started
+  summarization_completed
+  summarization_failed
+  action_created
+  action_updated
+  action_deleted
+
+  @@map("event_type")
+}
+
+model AuditEvent {
+  id           String    @id @default(cuid())
+  type         EventType
+  userId       String?
+  user         User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  noteId       String?
+  note         Note?     @relation(fields: [noteId], references: [id], onDelete: SetNull)
+  metadata     Json?     // Additional event data
+  ipAddress    String?
+  userAgent    String?
+  correlationId String?
+  createdAt    DateTime  @default(now())
+
+  @@map("audit_events")
+}
+
+// =============================================
+// SYSTEM CONFIGURATION
+// =============================================
+
+model SystemConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("system_config")
+}
+
+// =============================================
+// INDEXES FOR PERFORMANCE
+// =============================================
+
+// User indexes
+// @@index([email]) - already unique
+
+// Note indexes
+// @@index([userId, createdAt])
+// @@index([status])
+// @@index([tags])
+
+// Audit indexes
+// @@index([userId, createdAt])
+// @@index([type, createdAt])
+// @@index([correlationId])
+
+// Processing job indexes
+// @@index([status, type])
+// @@index([noteId])
